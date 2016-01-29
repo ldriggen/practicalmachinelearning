@@ -1,0 +1,103 @@
+---
+title: "Coursera - Practical Machine Learning Course Project"
+author: "Larry Riggen"
+date: "January 2016"
+output: 
+  html_document: 
+    keep_md: yes
+---
+**Project Overview**
+
+   This project is based on the data collected for the paper (http://groupware.les.inf.puc-rio.br/har). The study described in the
+   paper had subjects perform exercises with both proper and (several different) improper forms. While performing the exercises, the
+   participants were instrumented with wearable accelerometers.
+   
+   Machine learning algorithms will be use to predict the correctness of the exercise form based on the accelerometer data.
+   
+
+
+**General Analysis Flow**
+
+   1. Data cleaning - there are 160 variables in the dataset. Many of these variable have all missing values and will be removed. Also remove other variables that don't contribute to the analysis.
+  
+   2. The training set will be separated into a validation and training set so that models can be compared prior to use on the test set.
+   
+   3. Several different machine learning techniques will be used to create models on the training set and evaluated on the validation set.
+   
+   4. The model which is the most accurate on the validation set will be used to provide a prediction on the testing set.
+
+
+**1. Data Cleaning**
+
+   Many of the columns in the dataset consist of NAs. Any column consisting more than 95% NAs will be removed. Also, remove the following columns X, raw_timestamp_part_1, raw_timestamp_part_2, cvtd_timestamp, new_window, num_window as they are not needed for the analysis.
+
+
+```{r, echo=TRUE,results="hide",message=FALSE,warning=FALSE}
+# Perform some housekeeping
+setwd("E:/Coursera Data Scientist/Practical Machine Learning/Course Project")
+library(caret)
+library(rpart)
+library(data.table)
+library(rattle)
+set.seed(1492)
+# Read the files
+download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv","./pml-training.csv")
+download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv","./pml-testing.csv")
+originalTrainingFile<-read.csv("./pml-training.csv", na.strings=c("NA","#DIV/0!",""))
+originalTestingFile<-read.csv("./pml-testing.csv", na.strings=c("NA","#DIV/0!",""))
+# Determine the columns containing > 95% NAs and remove them
+countNAs<-sapply(originalTrainingFile, function(x) {sum(is.na(x))})
+NAcolumns<-names(countNAs[(countNAs/nrow(originalTrainingFile))>.95])
+originalTrainingFileColSubSet <- originalTrainingFile[, !names(originalTrainingFile) %in% NAcolumns]
+# Remove other non-contributing columns
+library(ISLR)
+originalTrainingFileColSubSet<-subset(originalTrainingFileColSubSet,select=-c(X,raw_timestamp_part_1,raw_timestamp_part_2,cvtd_timestamp,new_window,num_window))
+
+```
+
+**2. Separate the original training set into a training and validation set **
+
+```{r, echo=TRUE,results="hide",message=FALSE,warning=FALSE}
+intTrain<-createDataPartition(y=originalTrainingFileColSubSet$classe, p=0.7, list=FALSE)
+training<-originalTrainingFileColSubSet[intTrain, ]
+testing<-originalTrainingFileColSubSet[-intTrain, ]
+```
+
+**3. Build several models and compare them on the validation set **
+
+Create a decision tree, a random forest, and a generalized boosted model based on the subset of the original training dataset assigned
+for training.
+
+```{r, echo=TRUE,results="hide",message=FALSE,warning=FALSE}
+
+modFitDT<-rpart(classe~.,method="class",data=training)
+modFitRF<-train(classe~.,method="rf",data=training,verbose=FALSE)
+modFitGBM<-train(classe~.,method="gbm",data=training,verbose=FALSE)
+```
+
+Run the model against the subset of the original training set assigned to testing. Compare the accuracy of the models using the confusion matrix.
+
+
+```{r, echo=TRUE}
+predDT<-predict(modFitDT,testing,type="class")
+confusionMatrix(predDT,testing$classe)
+
+predRF<-predict(modFitRF,testing)
+confusionMatrix(predRF,testing$classe)
+
+predGBM<-predict(modFitGBM,testing)
+confusionMatrix(predGBM,testing$classe)
+```
+
+**4. The random forest model was the most accurate. Use it to perform a prediction on the original testing set**
+
+
+```{r, eval=TRUE}
+predRF_Final<-predict(modFitRF,originalTestingFile)
+predRF_Final
+```
+
+
+**Summary**
+
+The predRF_Final set above was used to answer the questions in the Course Project Prediction Quiz with 100% accuracy.
